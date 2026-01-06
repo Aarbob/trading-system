@@ -7,12 +7,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from Strategy_Backtesting import Backtester, PerformanceAnalyzer
-from gateway import MarketDataGateway
-from matching_engine import MatchingEngine
-from order_book import OrderBook
-from order_manager import OrderManager
-from strategy_base import MovingAverageStrategy
+from core.backtester import Backtester, PerformanceAnalyzer
+from core.gateway import MarketDataGateway
+from core.matching_engine import MatchingEngine
+from core.order_book import OrderBook
+from core.order_manager import OrderManager
+from strategies import MovingAverageStrategy
+
+DATA_DIR = Path("data")
 
 
 def create_sample_data(path: Path, periods: int = 200) -> None:
@@ -30,10 +32,11 @@ def create_sample_data(path: Path, periods: int = 200) -> None:
 
 
 def main() -> None:
-    sample_csv = Path("sample_system_test_data.csv")
+    sample_csv = DATA_DIR / "sample_system_test_data.csv"
     if not sample_csv.exists():
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
         create_sample_data(sample_csv)
-        print("✅ Sample data generated.")
+        print("Sample data generated.")
 
     gateway = MarketDataGateway(sample_csv)
     strategy = MovingAverageStrategy(short_window=5, long_window=12, position_size=10)

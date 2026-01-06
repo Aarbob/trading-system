@@ -1,146 +1,137 @@
-# Trading System Project
+# Trading System
+## What this includes
+- Alpaca paper-data download + cleaning helpers.
+- A paper-trading runner that submits orders through Alpaca.
+- A lightweight backtester with a market data gateway, order book, order manager,
+  and matching engine (offline only).
+- Two strategies only:
+  - TemplateStrategy: a starter template to customize.
+  - MovingAverageStrategy: a simple moving average crossover baseline.
 
-Modular backtesting environment that follows the four parts outlined in the project
-brief: data acquisition and preparation, exchange simulation, strategy
-backtesting, and an Alpaca paper-trading handoff. Everything runs locally in
-pure Python.
+## Accessing Alpaca
+Reminders:
+   Do not add real money to your Alpaca account.
+   Do not share your API keys.
+   Keep it simple if you're short on time.
 
----
+1. Sign up at alpaca.markets.
+   Complete identity verification and confirm your email. 
+2. Configure the paper trading option. Your starting equity should be $1,000,000.
+3. Obtain your API Key ID and Secret Key at https://app.alpaca.markets/dashboard/overview 
+   by scrolling down and looking at the right side of the screen. Generate the endpoint, key, and secret.
+4. Retrieve Market Data
 
-## Part 1 – Data Download and Preparation
+In your terminal, install Alpaca SDK:
 
-### Step 1: Download Intraday Market Data
-- `data_pipeline.download_equity_data()` pulls equity candles via `yfinance` and
-  stores them in `raw_data_stock/` as CSV files with columns
-  `Datetime, Open, High, Low, Close, Volume`.
-- `data_pipeline.download_crypto_data()` fetches crypto candles from the Binance
-  REST API and stores them in `raw_data_crypto/` with the same schema.
-
+```bash
+pip install alpaca-trade-api
+```
+Sample usage:
 ```python
-from data_pipeline import download_equity_data, download_crypto_data
+import alpaca_trade_api as tradeapi
 
-raw_equity_path = download_equity_data("AAPL", period="7d", interval="1m")
-raw_crypto_path = download_crypto_data("BTCUSDT", interval="1m", limit=1000)
+api = tradeapi.REST('your_api_key', 'your_api_secret', 'https://paper-api.alpaca.markets')
+
+bars = api.get_bars('AAPL', '1Min', limit=1).df
+```
+   Review Alpaca's API docs and GitHub for more endpoints.
+
+5. Save Market Data via flat files CSV, Pickle, OR parquet.
+
+## Run modes
+
+Backtest (offline CSV):
+```
+python run_backtest.py --csv data/AAPL_1Min_stock_alpaca_clean.csv --strategy ma
+```
+To run your strategy, replace `ma` with `template` or your class name.
+
+Live paper trading (Alpaca):
+```
+python run_live.py --symbol AAPL --asset-class stock --strategy ma --timeframe 1Min --live
 ```
 
-### Step 2: Clean and Organize Data
-- `data_pipeline.clean_market_data()` removes missing/duplicate rows, enforces a
-  chronological `Datetime` index, and adds derived features such as returns,
-  rolling volatility, and momentum.
-- The cleaned datasets are saved to `clean_data_stock/` or `clean_data_crypto/`
-  and are ready for ingestion by the gateway.
-
-```python
-from data_pipeline import clean_market_data
-
-clean_path = clean_market_data(raw_equity_path)
-print("Cleaned data:", clean_path)
-```
-
-### Step 3: Create a Trading Strategy
-- `strategy_base.Strategy` defines the interface, while
-  `strategy_base.MovingAverageStrategy` implements a moving average crossover
-  with clear entry/exit rules and position sizing logic.
-
-```python
-from strategy_base import MovingAverageStrategy
-
-strategy = MovingAverageStrategy(short_window=20, long_window=60, position_size=15)
-```
-
----
-
-## Part 2 – Backtester Framework
-
-### Market Data Gateway (`gateway.py`)
-Reads cleaned CSV files and streams candles row-by-row through an iterator or
-the `stream()` generator. Mimics a live feed by optionally adding delays.
-
-### Order Book (`order_book.py`)
-Stores bids and asks in heaps to enforce price-time priority. Supports order
-addition, modification (by cancel + re-add), cancellation, and matching.
-
-### Order Manager & Logging (`order_manager.py`)
-Performs capital sufficiency checks, position-risk checks (long + short limits),
-and order rate limiting. `OrderLoggingGateway` writes a JSONL audit trail of
-submitted, rejected, and executed orders.
-
-### Matching Engine (`matching_engine.py`)
-Randomly decides whether matched orders are filled, partially filled, or
-cancelled, and returns execution reports for the backtester.
-
----
-
-## Part 3 – Strategy Backtesting
-
-`Strategy_Backtesting.Backtester` ties together the gateway, strategy, order
-book, order manager, matching engine, and logger to simulate execution. The
-loop:
-1. Pulls a new candle from the gateway.
-2. Runs the strategy to update indicators and generate a signal.
-3. Builds an order (with configurable position size) when signals fire.
-4. Validates via `OrderManager` and inserts orders into the `OrderBook`.
-5. Uses the `MatchingEngine` to simulate fills/partials/cancellations.
-6. Tracks portfolio cash, positions, equity, and trade-level PnL.
-
-`Strategy_Backtesting.PerformanceAnalyzer` computes PnL, Sharpe ratio, max
-drawdown, and win rate. `plot_equity()` visualizes the equity curve.
-
-**Quick start**
-```
-python test_system.py
-```
-This generates sample data (if needed), runs the backtest, and prints summary
-statistics.
-
----
-
-## Part 4 – Alpaca Trading Challenge
-1. **Create an Alpaca account** at [alpaca.markets](https://alpaca.markets) and
-   complete identity verification (paper trading only).
-2. **Configure paper trading** via the Alpaca dashboard (Paper Overview → Reset
-   virtual funds as needed).
-3. **Obtain API keys** from the dashboard and keep them secure. Use only paper
-   trading endpoints.
-4. **Retrieve market data** with the Alpaca SDK:
-   ```python
-   import alpaca_trade_api as tradeapi
-
-   api = tradeapi.REST(API_KEY, API_SECRET, "https://paper-api.alpaca.markets")
-   data = api.get_bars("AAPL", "1Min", limit=100).df
-   data.to_csv("alpaca_data/AAPL_1m.csv")
-   ```
-5. **Save market data** in flat files (CSV/Parquet) or a database. Organize by
-   asset and timeframe, and handle timezones carefully.
-6. **Use your Part 1 strategy** with Alpaca by feeding Alpaca candles through
-   the same classes (`MarketDataGateway`, `Backtester`, etc.). No new strategy
-   code is required; you can re-use and tune the existing implementation.
-
----
-
-## Project Structure
-```
-clean_data_crypto/
-clean_data_stock/
-raw_data_crypto/
-raw_data_stock/
-data_pipeline.py
-gateway.py
-order_book.py
-order_manager.py
-matching_engine.py
-strategy_base.py
-Strategy_Backtesting.py
-test_system.py
-Readme.md
-```
-
----
-
-## Requirements
-Create a virtual environment and install dependencies:
+## Quick start (Alpaca paper trading)
+1) Install dependencies:
 ```
 pip install -r requirements.txt
 ```
-Key libraries: `pandas`, `numpy`, `matplotlib`, `yfinance`, `requests`,
-`alpaca-trade-api` (for Part 4), and standard Python tooling.
+2) Create a `.env` file in the project root:
+```
+ALPACA_API_KEY=your_key_here
+ALPACA_API_SECRET=your_secret_here
+ALPACA_API_URL=https://paper-api.alpaca.markets
+ALPACA_DATA_FEED=iex
+```
+The scripts load this file automatically.
+ALPACA_DATA_FEED is optional and applies to stock data.
+3) Run the paper-trading loop:
+```
+python run_live.py --symbol AAPL --asset-class stock --strategy ma --timeframe 1Min
+```
+
+You will see trade-by-trade output in the terminal, followed by a summary.
+Use `--save-data` to write raw and cleaned CSVs to `data/`.
+Use `--dry-run` to preview decisions without placing orders.
+For crypto, use symbols like `BTCUSD` with `--asset-class crypto`.
+This script submits paper orders to Alpaca.
+To run continuously, add `--live` and stop with Ctrl+C.
+
+Optional local smoke test (synthetic data):
+```
+python test_system.py
+```
+
+## Fetch data with Alpaca
+Use the notebooks in `notebooks/`:
+- `notebooks/fetch_data_stock.ipynb`
+- `notebooks/fetch_data_crypto.ipynb`
+
+They download bars from Alpaca and save raw/clean CSVs to `data/`.
+
+## Build your own strategy
+Open `strategies/strategy_base.py` and edit `TemplateStrategy` (recommended), or add your own class.
+The backtester expects:
+- `signal`: 1 for buy, -1 for sell, 0 for no action.
+- `target_qty`: the quantity to trade when a signal triggers.
+- Optionally, `limit_price` if you want a limit price different from `Close`.
+
+The Alpaca runner uses these same fields to submit paper orders.
+To run your custom class from the CLI, give it a no-arg constructor and call (case-insensitive):
+```
+python run_backtest.py --csv data/AAPL_1Min_stock_alpaca_clean.csv --strategy MyStrategy
+```
+or
+```
+python run_live.py --symbol AAPL --asset-class stock --strategy MyStrategy --timeframe 1Min --live
+```
+
+Example signal logic inside `generate_signals`:
+```python
+df["signal"] = 0
+buy = df["momentum"] > 0.01
+sell = df["momentum"] < -0.01
+df.loc[buy, "signal"] = 1
+df.loc[sell, "signal"] = -1
+df["position"] = df["signal"].replace(0, np.nan).ffill().fillna(0)
+df["target_qty"] = df["position"].abs() * self.position_size
+```
+
+## Trade output format (live)
+Each fill prints a line like:
+```
+2024-01-01 09:31:00 | BUY 10 AAPL @ 101.23 | order_id=1234 | net_pnl=+12.50
+```
+
+## Project structure
+```
+core/
+pipeline/
+strategies/
+data/
+notebooks/
+.env
+run_backtest.py
+run_live.py
+test_system.py
+```
