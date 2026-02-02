@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
-
+import matplotlib
+matplotlib.use("Agg")  # Use a non-interactive backend
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -13,6 +14,7 @@ from core.matching_engine import MatchingEngine
 from core.order_book import Order, OrderBook
 from core.order_manager import OrderLoggingGateway, OrderManager
 from strategies import MovingAverageStrategy, Strategy
+
 
 DATA_DIR = Path("data")
 
@@ -377,3 +379,4 @@ if __name__ == "__main__":
 
     ma_strategy = MovingAverageStrategy(short_window=5, long_window=15, position_size=10)
     run_sample_backtest(str(sample_csv), strategy=ma_strategy, title="Moving Average Baseline")
+
